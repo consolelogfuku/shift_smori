@@ -1,7 +1,6 @@
-import Papa from 'papaparse';
 import type { MonthPlan, ScheduleResult, Settings } from '../types';
 import { WEEKDAY_LABELS, dayOfMonth, datesOfMonth, dayStatus, formatTimeRange, formatYearMonth, subtractTimeOff, weekday } from './dates';
-import { downloadBlob, downloadText } from './file';
+import { downloadBlob } from './file';
 
 /** その人のその日の基本勤務時間 */
 export function timeFor(settings: Settings, plan: MonthPlan, empId: string, date: string): { start: string; end: string } | null {
@@ -71,7 +70,3 @@ export async function exportXlsx(settings: Settings, plan: MonthPlan, result: Sc
   downloadBlob(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `シフト_${formatYearMonth(plan.yearMonth)}.xlsx`);
 }
 
-export function exportCsv(settings: Settings, plan: MonthPlan, result: ScheduleResult): void {
-  const csv = Papa.unparse(buildScheduleTable(settings, plan, result));
-  downloadText(`\uFEFF${csv}`, `シフト_${formatYearMonth(plan.yearMonth)}.csv`, 'text/csv;charset=utf-8');
-}

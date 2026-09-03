@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
-import { ArrowsClockwise, CheckCircle, FileCsv, FileXls, Warning } from '@phosphor-icons/react';
+import { ArrowsClockwise, CheckCircle, FileXls, Warning } from '@phosphor-icons/react';
 import { useStore } from '../store';
 import { WEEKDAY_LABELS, businessDays, dayOfMonth, datesOfMonth, dayStatus, formatDateShort, formatTime, holidayName, weekday } from '../lib/dates';
 import { evaluate } from '../solver/evaluate';
-import { exportCsv, exportXlsx, timeFor } from '../lib/exportSchedule';
+import { exportXlsx, timeFor } from '../lib/exportSchedule';
 import { useSolver } from '../hooks/useSolver';
 
 import { hashInputs, type Violation } from '../types';
@@ -55,9 +55,6 @@ export function ResultView({ yearMonth }: { yearMonth: string }) {
         <div className="row center">
           <button className="btn" onClick={() => solver.run(yearMonth)} disabled={solver.running}>
             <ArrowsClockwise size={16} /> {solver.running ? `組み直し中 ${Math.round(solver.progress * 100)}%` : '組み直す'}
-          </button>
-          <button className="btn" onClick={() => exportCsv(settings, plan, result)}>
-            <FileCsv size={16} /> CSV
           </button>
           <button className="btn btn-primary" onClick={() => exportXlsx(settings, plan, result)}>
             <FileXls size={16} /> Excel で出力
