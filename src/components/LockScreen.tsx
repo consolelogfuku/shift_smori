@@ -10,6 +10,7 @@ export function LockScreen({ mode, hasLegacy, onDone }: { mode: Mode; hasLegacy:
   const [pass2, setPass2] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [show, setShow] = useState(false);
   const { confirm, node } = useConfirm();
 
   const submit = async () => {
@@ -67,13 +68,17 @@ export function LockScreen({ mode, hasLegacy, onDone }: { mode: Mode; hasLegacy:
           }}
         >
           <Field label="合言葉">
-            <input className="input" type="password" value={pass} onChange={(e) => setPass(e.target.value)} autoFocus autoComplete={mode === 'setup' ? 'new-password' : 'current-password'} />
+            <input className="input" type={show ? 'text' : 'password'} value={pass} onChange={(e) => setPass(e.target.value)} autoFocus autoComplete={mode === 'setup' ? 'new-password' : 'current-password'} />
           </Field>
           {mode === 'setup' && (
             <Field label="合言葉 (確認)">
-              <input className="input" type="password" value={pass2} onChange={(e) => setPass2(e.target.value)} autoComplete="new-password" />
+              <input className="input" type={show ? 'text' : 'password'} value={pass2} onChange={(e) => setPass2(e.target.value)} autoComplete="new-password" />
             </Field>
           )}
+          <label className="checkbox small">
+            <input type="checkbox" checked={show} onChange={(e) => setShow(e.target.checked)} />
+            合言葉を表示
+          </label>
           {err && <p className="small" style={{ color: 'var(--danger)' }}>{err}</p>}
           <button type="submit" className="btn btn-primary btn-lg" disabled={busy || !pass}>
             {busy ? '確認中' : mode === 'setup' ? 'この合言葉で始める' : '開く'}

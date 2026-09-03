@@ -205,6 +205,7 @@ function ChangePassModal({ onClose, onDone }: { onClose: () => void; onDone: () 
   const [next2, setNext2] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [show, setShow] = useState(false);
   const submit = async () => {
     setErr(null);
     if (next.length < 4) return setErr('新しい合言葉は 4 文字以上にしてください。');
@@ -234,14 +235,18 @@ function ChangePassModal({ onClose, onDone }: { onClose: () => void; onDone: () 
     >
       <div className="stack">
         <Field label="今の合言葉">
-          <input className="input" type="password" value={cur} onChange={(e) => setCur(e.target.value)} autoFocus autoComplete="current-password" />
+          <input className="input" type={show ? 'text' : 'password'} value={cur} onChange={(e) => setCur(e.target.value)} autoFocus autoComplete="current-password" />
         </Field>
         <Field label="新しい合言葉">
-          <input className="input" type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" />
+          <input className="input" type={show ? 'text' : 'password'} value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" />
         </Field>
         <Field label="新しい合言葉 (確認)">
-          <input className="input" type="password" value={next2} onChange={(e) => setNext2(e.target.value)} autoComplete="new-password" />
+          <input className="input" type={show ? 'text' : 'password'} value={next2} onChange={(e) => setNext2(e.target.value)} autoComplete="new-password" />
         </Field>
+        <label className="checkbox small">
+          <input type="checkbox" checked={show} onChange={(e) => setShow(e.target.checked)} />
+          合言葉を表示
+        </label>
         {err && <p className="small" style={{ color: 'var(--danger)' }}>{err}</p>}
       </div>
     </Modal>
