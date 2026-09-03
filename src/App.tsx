@@ -25,6 +25,23 @@ const PLAN_LABELS: Record<PlanScreen, string> = {
   planRun: 'シフトを組む',
 };
 
+const TUTORIAL_KEY = 'shift-smori-tutorial-seen';
+/** チュートリアルを見たかどうかだけは個人情報を含まないので localStorage に残す */
+function readTutorialSeen(): boolean {
+  try {
+    return localStorage.getItem(TUTORIAL_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+function writeTutorialSeen(): void {
+  try {
+    localStorage.setItem(TUTORIAL_KEY, '1');
+  } catch {
+    /* 使えない環境では何もしない */
+  }
+}
+
 export function App() {
   useEffect(() => {
     // 以前のバージョンが localStorage に残したデータは消す (今は sessionStorage のみ)
@@ -42,7 +59,6 @@ function Main() {
   const rawPage = useStore((s) => s.ui.page);
   const page: Page = SETTINGS_SCREENS.includes(rawPage as SettingsScreen) || PLAN_SCREENS.includes(rawPage as PlanScreen) ? rawPage : (rawPage as string) === 'result' ? 'planRun' : ['plan', 'planHeadcount', 'planSkills'].includes(rawPage as string) ? 'planClosed' : 'employees';
   const setPage = useStore((s) => s.setPage);
-  const tutorialSeen = useStore((s) => s.ui.tutorialSeen);
   const setTutorialSeen = useStore((s) => s.setTutorialSeen);
   const exportData = useStore((s) => s.exportData);
   const importData = useStore((s) => s.importData);
@@ -57,7 +73,7 @@ function Main() {
     void s.ui.savedHash;
     return s.isDirty();
   });
-  const [showTutorial, setShowTutorial] = useState(!tutorialSeen);
+  const [showTutorial, setShowTutorial] = useState(() => !readTutorialSeen());
   const [openSettings, setOpenSettings] = useState(true);
   const [openPlan, setOpenPlan] = useState(true);
   const [pending, setPending] = useState<{ data: AppData; name: string } | null>(null);
@@ -95,6 +111,7 @@ function Main() {
   const closeTutorial = () => {
     setShowTutorial(false);
     setTutorialSeen(true);
+    writeTutorialSeen();
   };
 
   return (
