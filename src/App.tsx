@@ -19,10 +19,10 @@ const SETTINGS_LABELS: Record<SettingsScreen, string> = {
 };
 
 const PLAN_LABELS: Record<PlanScreen, string> = {
-  planClosed: 'STEP1 営業所の休業日を登録',
-  planOffs: 'STEP2 有給・出勤希望日を登録',
-  planRoles: 'STEP3 必要な役割を調整',
-  planRun: 'STEP4 シフトを組む',
+  planClosed: '営業所の休業日を登録',
+  planOffs: '有給・出勤希望日を登録',
+  planRoles: '必要な役割を調整',
+  planRun: 'シフトを組む',
 };
 
 export function App() {
