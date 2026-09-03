@@ -278,6 +278,7 @@ table.sched { border-collapse: separate; border-spacing: 0; }
 .tut-head { display: grid; grid-template-columns: 28px 1fr; gap: 12px; align-items: start; }
 .tut-head h3 { font-size: 15px; margin-bottom: 2px; }
 .tut-n { width: 28px; height: 28px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink); display: grid; place-items: center; font-weight: 700; font-size: 13px; }
+.tut-n.warn { background: var(--warn-soft); color: var(--warn-ink); }
 .tut-foot { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 12px; }
 .tut-dots { display: flex; gap: 6px; }
 .tut-dots button { width: 8px; height: 8px; border-radius: 50%; border: 0; padding: 0; background: var(--line); cursor: pointer; }

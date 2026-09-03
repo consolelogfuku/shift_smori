@@ -20,6 +20,8 @@ export function Tutorial({ onClose }: { onClose: () => void }) {
   const [i, setI] = useState(0);
   const step = STEPS[i];
   const last = i === STEPS.length - 1;
+  const inGroup = STEPS.slice(0, i + 1).filter((st) => st.group === step.group).length;
+  const groupSize = STEPS.filter((st) => st.group === step.group).length;
   return (
     <Modal
       title="使い方"
@@ -51,10 +53,16 @@ export function Tutorial({ onClose }: { onClose: () => void }) {
     >
       <div className="tut">
         <div className="tut-head">
-          <span className="tut-n num">{i + 1}</span>
+          <span className={`tut-n num${step.group === '注意事項' ? ' warn' : ''}`}>{step.group === '注意事項' ? '!' : inGroup}</span>
           <div>
-            <span className={`chip${step.group === '注意事項' ? ' warn' : ' accent'}`} style={{ marginBottom: 6 }}>
+            <span className="dim small" style={{ display: 'block', marginBottom: 2 }}>
               {step.group}
+              {step.group !== '注意事項' && (
+                <span className="num">
+                  {' '}
+                  {inGroup} / {groupSize}
+                </span>
+              )}
             </span>
             <h3>{step.title}</h3>
             <p className="muted">{step.body}</p>
