@@ -14,10 +14,11 @@ export function downloadText(text: string, filename: string, mime = 'text/plain;
   downloadBlob(new Blob([text], { type: mime }), filename);
 }
 
+/** ファイル名用の日時 (例: 20260904_0932) */
 export function todayStamp(): string {
   const d = new Date();
   const p = (n: number) => (n < 10 ? `0${n}` : String(n));
-  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`;
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
 }
 
 export function readFileAsText(file: File): Promise<string> {
