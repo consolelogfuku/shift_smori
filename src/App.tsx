@@ -163,7 +163,7 @@ function Main() {
           <button className="btn btn-ghost" onClick={() => setShowTutorial(true)}>
             <Question size={16} /> 使い方
           </button>
-          <p className="dim small sidebar-note">データはサーバーには送られません。このタブを閉じると消えるので、終わったら「保存する」でファイルを残してください。</p>
+          <p className="dim small sidebar-note">データはこのタブを閉じると消えるので、終わったら「保存する」でファイルを残してください。</p>
         </div>
       </aside>
       <main className="main">
