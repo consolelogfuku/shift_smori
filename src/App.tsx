@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { CaretDown, DownloadSimple, Key, LockKey, Question, Table, UploadSimple } from '@phosphor-icons/react';
+import { CaretDown, DownloadSimple, Question, Table, UploadSimple } from '@phosphor-icons/react';
 import { PLAN_SCREENS, SETTINGS_SCREENS, parseAppData, useStore, type Page, type PlanScreen, type SettingsScreen } from './store';
 import { SettingsPage } from './pages/SettingsPage';
 import { PlanPage } from './pages/PlanPage';
 import { Tutorial } from './components/Tutorial';
-import { LockScreen } from './components/LockScreen';
-import { Field, Modal, useToast } from './components/ui';
+import { Modal, useToast } from './components/ui';
 import { downloadText, readFileAsText, todayStamp } from './lib/file';
-import { changePassphrase, flushWrites, hasEncryptedData, legacyPlainData, lock } from './lib/secureStorage';
 import type { AppData } from './types';
 
 const SETTINGS_LABELS: Record<SettingsScreen, string> = {
@@ -27,27 +25,16 @@ const PLAN_LABELS: Record<PlanScreen, string> = {
   planRun: 'STEP4 シフトを組む',
 };
 
-type Gate = 'checking' | 'setup' | 'unlock' | 'ready';
-
 export function App() {
-  const [gate, setGate] = useState<Gate>('checking');
-  const [hasLegacy, setHasLegacy] = useState(false);
-
   useEffect(() => {
-    if (hasEncryptedData()) setGate('unlock');
-    else {
-      setHasLegacy(legacyPlainData() !== null);
-      setGate('setup');
+    // 以前のバージョンが localStorage に残したデータは消す (今は sessionStorage のみ)
+    try {
+      localStorage.removeItem('shift-smori');
+      localStorage.removeItem('shift-smori-enc');
+    } catch {
+      /* 使えない環境では何もしない */
     }
   }, []);
-
-  const onUnlocked = async () => {
-    await useStore.persist.rehydrate();
-    setGate('ready');
-  };
-
-  if (gate === 'checking') return null;
-  if (gate !== 'ready') return <LockScreen mode={gate} hasLegacy={hasLegacy} onDone={onUnlocked} />;
   return <Main />;
 }
 
@@ -60,17 +47,27 @@ function Main() {
   const exportData = useStore((s) => s.exportData);
   const importData = useStore((s) => s.importData);
   const employeeCount = useStore((s) => s.settings.employees.length);
+  const markSaved = useStore((s) => s.markSaved);
+  const isDirty = useStore((s) => s.isDirty);
+  // 状態が変わるたびに再評価される (セレクタで購読)
+  const dirty = useStore((s) => {
+    void s.settings;
+    void s.plans;
+    void s.results;
+    void s.ui.savedHash;
+    return s.isDirty();
+  });
   const [showTutorial, setShowTutorial] = useState(!tutorialSeen);
   const [openSettings, setOpenSettings] = useState(true);
   const [openPlan, setOpenPlan] = useState(true);
   const [pending, setPending] = useState<{ data: AppData; name: string } | null>(null);
-  const [changingPass, setChangingPass] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
 
   const save = () => {
     const data = exportData();
     downloadText(JSON.stringify(data, null, 2), `シフト設定_${todayStamp()}.json`, 'application/json');
+    markSaved();
     toast.show('設定ファイルをダウンロードしました');
   };
 
@@ -85,11 +82,15 @@ function Main() {
     if (fileRef.current) fileRef.current.value = '';
   };
 
-  const doLock = async () => {
-    await flushWrites();
-    lock();
-    location.reload();
-  };
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!isDirty()) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [isDirty]);
 
   const closeTutorial = () => {
     setShowTutorial(false);
@@ -134,25 +135,18 @@ function Main() {
             ))}
         </nav>
         <div className="sidebar-foot">
-          <button className="btn" onClick={save} disabled={employeeCount === 0}>
+          <button className={`btn${dirty ? ' btn-primary' : ''}`} onClick={save} disabled={employeeCount === 0}>
             <DownloadSimple size={16} /> 保存する
           </button>
+          {dirty && <p className="small sidebar-note" style={{ color: 'var(--warn-ink)', padding: '0 8px', margin: '-4px 0 0' }}>未保存の変更があります。閉じる前に保存してください。</p>}
           <button className="btn" onClick={() => fileRef.current?.click()}>
             <UploadSimple size={16} /> 読み込む
           </button>
           <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={(e) => onFile(e.target.files?.[0])} />
-          <button className="btn btn-ghost" onClick={doLock}>
-            <LockKey size={16} /> ロックする
+          <button className="btn btn-ghost" onClick={() => setShowTutorial(true)}>
+            <Question size={16} /> 使い方
           </button>
-          <div className="row" style={{ gap: 4 }}>
-            <button className="btn btn-ghost btn-sm" onClick={() => setShowTutorial(true)}>
-              <Question size={16} /> 使い方
-            </button>
-            <button className="btn btn-ghost btn-sm" onClick={() => setChangingPass(true)}>
-              <Key size={16} /> 合言葉を変える
-            </button>
-          </div>
-          <p className="dim small sidebar-note">データはこのブラウザの中に合言葉で暗号化して保存されます。</p>
+          <p className="dim small sidebar-note">データはサーバーには送られません。このタブを閉じると消えるので、終わったら「保存する」でファイルを残してください。</p>
         </div>
       </aside>
       <main className="main">
@@ -160,7 +154,6 @@ function Main() {
         {PLAN_SCREENS.includes(page as PlanScreen) && <PlanPage screen={page as PlanScreen} />}
       </main>
       {showTutorial && <Tutorial onClose={closeTutorial} />}
-      {changingPass && <ChangePassModal onClose={() => setChangingPass(false)} onDone={() => toast.show('合言葉を変えました')} />}
       {pending && (
         <Modal
           title="設定ファイルを読み込む"
@@ -196,59 +189,5 @@ function Main() {
       )}
       {toast.node}
     </div>
-  );
-}
-
-function ChangePassModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const [cur, setCur] = useState('');
-  const [next, setNext] = useState('');
-  const [next2, setNext2] = useState('');
-  const [err, setErr] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [show, setShow] = useState(false);
-  const submit = async () => {
-    setErr(null);
-    if (next.length < 4) return setErr('新しい合言葉は 4 文字以上にしてください。');
-    if (next !== next2) return setErr('確認用の合言葉が一致しません。');
-    setBusy(true);
-    await flushWrites();
-    const ok = await changePassphrase(cur, next);
-    setBusy(false);
-    if (!ok) return setErr('今の合言葉が違います。');
-    onDone();
-    onClose();
-  };
-  return (
-    <Modal
-      title="合言葉を変える"
-      onClose={onClose}
-      footer={
-        <>
-          <button className="btn" onClick={onClose}>
-            キャンセル
-          </button>
-          <button className="btn btn-primary" onClick={submit} disabled={busy || !cur || !next}>
-            変更する
-          </button>
-        </>
-      }
-    >
-      <div className="stack">
-        <Field label="今の合言葉">
-          <input className="input" type={show ? 'text' : 'password'} value={cur} onChange={(e) => setCur(e.target.value)} autoFocus autoComplete="current-password" />
-        </Field>
-        <Field label="新しい合言葉">
-          <input className="input" type={show ? 'text' : 'password'} value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" />
-        </Field>
-        <Field label="新しい合言葉 (確認)">
-          <input className="input" type={show ? 'text' : 'password'} value={next2} onChange={(e) => setNext2(e.target.value)} autoComplete="new-password" />
-        </Field>
-        <label className="checkbox small">
-          <input type="checkbox" checked={show} onChange={(e) => setShow(e.target.checked)} />
-          合言葉を表示
-        </label>
-        {err && <p className="small" style={{ color: 'var(--danger)' }}>{err}</p>}
-      </div>
-    </Modal>
   );
 }

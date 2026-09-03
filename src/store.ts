@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { secureStorage } from './lib/secureStorage';
 import {
   emptyPlan,
   emptySettings,
@@ -29,6 +28,8 @@ interface UiState {
   page: Page;
   yearMonth: string;
   tutorialSeen: boolean;
+  /** 最後に「保存する」した時点のデータのハッシュ。未保存の変更の検知に使う */
+  savedHash?: string;
 }
 
 interface Store extends AppData {
@@ -36,6 +37,8 @@ interface Store extends AppData {
   setPage: (p: Page) => void;
   setYearMonth: (ym: string) => void;
   setTutorialSeen: (v: boolean) => void;
+  markSaved: () => void;
+  isDirty: () => boolean;
 
   // settings
   addSkill: (name: string) => Skill;
@@ -111,6 +114,13 @@ export const useStore = create<Store>()(
       setPage: (page) => set((s) => ({ ui: { ...s.ui, page } })),
       setYearMonth: (yearMonth) => set((s) => ({ ui: { ...s.ui, yearMonth } })),
       setTutorialSeen: (tutorialSeen) => set((s) => ({ ui: { ...s.ui, tutorialSeen } })),
+      markSaved: () => set((s) => ({ ui: { ...s.ui, savedHash: dataHash(get().exportData()) } })),
+      isDirty: () => {
+        const st = get();
+        const empty = st.settings.employees.length === 0 && st.settings.skills.length === 0 && Object.keys(st.plans).length === 0;
+        if (empty) return false;
+        return st.ui.savedHash !== dataHash(st.exportData());
+      },
 
       addSkill: (name) => {
         const skill: Skill = { id: newId(), name: name.trim() };
@@ -361,19 +371,19 @@ export const useStore = create<Store>()(
         return { version: 1, settings, plans, results };
       },
       importData: (data) =>
-        set({
+        set((s) => ({
+          ui: { ...s.ui, savedHash: dataHash({ ...data, version: 1 }) },
           version: 1,
           settings: { ...emptySettings(), ...data.settings, dailyRoleNeeds: data.settings.dailyRoleNeeds ?? {} },
           plans: data.plans ?? {},
           results: data.results ?? {},
-        }),
+        })),
       resetAll: () => set({ settings: emptySettings(), plans: {}, results: {} }),
     }),
     {
       name: 'shift-smori',
       version: 1,
-      storage: createJSONStorage(() => secureStorage),
-      skipHydration: true,
+      storage: createJSONStorage(() => sessionStorage),
       partialize: (s) => ({ version: s.version, settings: s.settings, plans: s.plans, results: s.results, ui: s.ui }),
       // 古い保存データに無い項目を補う (項目が増えた後もそのまま読み込める)
       merge: (persisted, current) => {
@@ -421,4 +431,12 @@ export function usePlan(yearMonth: string): MonthPlan {
     emptyPlanCache.set(yearMonth, e);
   }
   return e;
+}
+
+/** 保存済み判定用の簡易ハッシュ */
+export function dataHash(data: AppData): string {
+  const str = JSON.stringify(data);
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+  return `${str.length}:${(h >>> 0).toString(36)}`;
 }
