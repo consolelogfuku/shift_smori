@@ -52,7 +52,7 @@ export function LockScreen({ mode, hasLegacy, onDone }: { mode: Mode; hasLegacy:
         </div>
         {mode === 'setup' ? (
           <div className="stack" style={{ gap: 6 }}>
-            <p>データに鍵をかけるための合言葉を決めてください。次からは、この合言葉を入れると開けます。</p>
+            <p>データはサーバーには送られず、ブラウザに保存されます。データに鍵をかけるための合言葉を決めてください。次からは、この合言葉を入れると開けます。</p>
             <p className="small" style={{ color: 'var(--danger)' }}>合言葉を忘れると開けなくなります。メモを残してください。</p>
             {hasLegacy && <p className="muted small">前に入れたデータはそのまま使えます。</p>}
           </div>
