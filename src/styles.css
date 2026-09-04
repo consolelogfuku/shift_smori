@@ -183,6 +183,7 @@ tr:hover .row-actions, tr:focus-within .row-actions { opacity: 1; }
 .chip.accent { background: var(--accent-soft); color: var(--accent-ink); }
 .chip.danger { background: var(--danger-soft); color: var(--danger); }
 .chip.warn { background: var(--warn-soft); color: var(--warn-ink); }
+.chip.info { background: #e3ecfa; color: #1f4f9c; }
 .chip .icon-btn { width: 18px; height: 18px; margin-right: -6px; }
 
 /* ---- calendar ---- */
@@ -248,7 +249,9 @@ table.sched { border-collapse: separate; border-spacing: 0; }
 .cellbtn:hover { background: var(--accent-soft-2); }
 .cellbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .cellbtn.on { color: var(--accent-ink); font-weight: 600; }
-.cellbtn.on.custom { text-decoration: underline dotted; }
+.cellbtn.on.custom { background: var(--warn-soft); }
+.cell-2l { display: flex; flex-direction: column; align-items: center; line-height: 1.2; }
+.cell-sub { font-size: 10px; color: var(--warn-ink); font-weight: 600; white-space: nowrap; }
 .cellbtn.wish { color: var(--warn-ink); font-weight: 700; background: var(--warn-soft); }
 .cellbtn.bad { color: var(--danger); background: var(--danger-soft); }
 .cellbtn.time { color: var(--accent-ink); font-weight: 600; font-size: 11px; background: var(--accent-soft-2); }
@@ -275,10 +278,8 @@ table.sched { border-collapse: separate; border-spacing: 0; }
 
 /* ---- tutorial ---- */
 .tut { display: flex; flex-direction: column; gap: 14px; }
-.tut-head { display: grid; grid-template-columns: 28px 1fr; gap: 12px; align-items: start; }
+.tut-head { display: flex; flex-direction: column; }
 .tut-head h3 { font-size: 15px; margin-bottom: 2px; }
-.tut-n { width: 28px; height: 28px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink); display: grid; place-items: center; font-weight: 700; font-size: 13px; }
-.tut-n.warn { background: var(--warn-soft); color: var(--warn-ink); }
 .tut-foot { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 12px; }
 .tut-dots { display: flex; gap: 6px; }
 .tut-dots button { width: 8px; height: 8px; border-radius: 50%; border: 0; padding: 0; background: var(--line); cursor: pointer; }
@@ -348,3 +349,6 @@ table.sched { border-collapse: separate; border-spacing: 0; }
 .step-badge-num { font-size: 15px; }
 .step-badge-total { font-size: 11px; opacity: 0.75; margin-left: 2px; }
 .step-head h1 { font-size: 22px; }
+
+/* ---- month picker ---- */
+.month-picker { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; border-color: var(--accent); background: var(--accent-soft-2); }

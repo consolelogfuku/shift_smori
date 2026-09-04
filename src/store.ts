@@ -16,10 +16,10 @@ import { newId } from './lib/id';
 import { nextYearMonth } from './lib/dates';
 
 export type SettingsScreen = 'employees' | 'skills' | 'patterns' | 'assignSkills' | 'assignPatterns' | 'dailyNeeds' | 'conflicts';
-export type PlanScreen = 'planClosed' | 'planOffs' | 'planRoles' | 'planRun';
+export type PlanScreen = 'planMonth' | 'planClosed' | 'planOffs' | 'planRoles' | 'planRun';
 export type Page = SettingsScreen | PlanScreen;
 export const SETTINGS_SCREENS: SettingsScreen[] = ['employees', 'skills', 'patterns', 'assignSkills', 'assignPatterns', 'dailyNeeds', 'conflicts'];
-export const PLAN_SCREENS: PlanScreen[] = ['planClosed', 'planOffs', 'planRoles', 'planRun'];
+export const PLAN_SCREENS: PlanScreen[] = ['planMonth', 'planClosed', 'planOffs', 'planRoles', 'planRun'];
 
 /** その人のその日の状態。互いに排他 */
 export type DayState = { kind: 'none' } | { kind: 'off' } | { kind: 'timeoff'; start: string; end: string } | { kind: 'fixed' };

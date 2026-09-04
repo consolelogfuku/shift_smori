@@ -28,19 +28,11 @@ export function violationsOf(m: Model, s: State): Violation[] {
         });
       }
     }
-    if (s.cnt[di] !== m.headcount[di]) {
-      out.push({
-        kind: 'headcount',
-        severity: 'hard',
-        message: `${formatDateShort(d)} の出勤は ${s.cnt[di]} 人です (必要 ${m.headcount[di]} 人)。`,
-        dates: [d],
-      });
-    }
-    if (m.headcount[di] > 0) {
+    if (m.roleSum[di] > 0) {
       const remain = unfilledRoles(m, di, s.present(di));
       for (let sk = 0; sk < m.S; sk++) {
         if (remain[sk] > 0) {
-          out.push({ kind: 'role', severity: 'hard', message: `${formatDateShort(d)} は「${m.skillNames[sk]}」が ${remain[sk]} 人足りません。`, dates: [d] });
+          out.push({ kind: 'role', severity: 'hard', message: `${formatDateShort(d)} は「${m.skillNames[sk]}」が ${remain[sk]} 人足りません。`, dates: [d], refId: m.skillIds[sk] });
         }
       }
     }
@@ -64,7 +56,9 @@ export function violationsOf(m: Model, s: State): Violation[] {
       out.push({
         kind: 'workdays',
         severity: 'soft',
-        message: `${m.empNames[e]} さんの出勤は ${s.work[e]} 日です (目標 ${m.target[e]} 日)。`,
+        message: m.targetExplicit[e]
+          ? `${m.empNames[e]} さんの出勤は ${s.work[e]} 日です (月の出勤日数の設定は ${m.target[e]} 日)。`
+          : `${m.empNames[e]} さんの出勤は ${s.work[e]} 日です (均等に配分すると ${m.target[e]} 日)。`,
         dates: [],
         employeeIds: [m.empIds[e]],
       });

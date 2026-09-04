@@ -1,19 +1,17 @@
 import { useMemo } from 'react';
-import { ArrowsClockwise, CheckCircle, FileXls, Warning } from '@phosphor-icons/react';
+import { CheckCircle, FileXls, Warning } from '@phosphor-icons/react';
 import { useStore } from '../store';
 import { WEEKDAY_LABELS, businessDays, dayOfMonth, datesOfMonth, dayStatus, formatDateShort, formatTime, holidayName, weekday } from '../lib/dates';
 import { evaluate } from '../solver/evaluate';
 import { exportXlsx, timeFor } from '../lib/exportSchedule';
-import { useSolver } from '../hooks/useSolver';
 
 import { hashInputs, type Violation } from '../types';
 
-export function ResultView({ yearMonth }: { yearMonth: string }) {
+export function ResultView({ yearMonth, knownIssues = [] }: { yearMonth: string; knownIssues?: Violation[] }) {
   const settings = useStore((s) => s.settings);
   const plan = useStore((s) => s.plans[yearMonth]);
   const result = useStore((s) => s.results[yearMonth]);
   const setResult = useStore((s) => s.setResult);
-  const solver = useSolver();
 
   const days = useMemo(() => (plan ? businessDays(plan) : []), [plan]);
   const evalResult = useMemo(() => (plan && result ? evaluate(settings, plan, days, result.assignments) : null), [settings, plan, days, result]);
@@ -21,13 +19,15 @@ export function ResultView({ yearMonth }: { yearMonth: string }) {
   if (!plan || !result || !evalResult) return null;
 
   const { model, state } = evalResult;
-  void model.S;
-  const violations = evalResult.violations;
+  // 実行前の診断に同じ不足があれば、理由の付いたその文を使う
+  const key = (v: Violation) => `${v.kind}|${v.dates.join(',')}|${v.refId ?? ''}`;
+  const known = new Map(knownIssues.map((v) => [key(v), v]));
+  const violations = evalResult.violations.map((v) => known.get(key(v)) ?? v);
   const hard = violations.filter((v) => v.severity === 'hard');
   const soft = violations.filter((v) => v.severity === 'soft');
   const dates = datesOfMonth(yearMonth);
   const empIndex = new Map(model.empIds.map((id, i) => [id, i]));
-  const badDays = new Set(hard.flatMap((v) => (v.kind === 'headcount' || v.kind === 'role' || v.kind === 'conflict' || v.kind === 'availability' ? v.dates : [])));
+  const badDays = new Set(hard.flatMap((v) => (v.kind === 'role' || v.kind === 'conflict' || v.kind === 'availability' ? v.dates : [])));
   const badCells = new Set(
     hard.flatMap((v) => (v.kind === 'conflict' || v.kind === 'availability' ? (v.employeeIds ?? []).flatMap((e) => v.dates.map((d) => `${e}|${d}`)) : [])),
   );
@@ -53,9 +53,6 @@ export function ResultView({ yearMonth }: { yearMonth: string }) {
           </p>
         </div>
         <div className="row center">
-          <button className="btn" onClick={() => solver.run(yearMonth)} disabled={solver.running}>
-            <ArrowsClockwise size={16} /> {solver.running ? `組み直し中 ${Math.round(solver.progress * 100)}%` : '組み直す'}
-          </button>
           <button className="btn btn-primary" onClick={() => exportXlsx(settings, plan, result)}>
             <FileXls size={16} /> Excel で出力
           </button>
@@ -66,13 +63,13 @@ export function ResultView({ yearMonth }: { yearMonth: string }) {
         {stale && (
           <div className="viol-item soft">
             <Warning size={18} weight="fill" style={{ flexShrink: 0, marginTop: 1 }} />
-            <span>この結果を作った後に設定か月の条件が変わっています。下の表は今の条件で再評価していますが、「組み直す」で条件に合わせた割り当てを作り直せます。</span>
+            <span>この結果を作った後に設定か月の条件が変わっています。下の表は今の条件で再評価していますが、上の「シフトを組む」を押すと、今の条件で作り直せます。</span>
           </div>
         )}
         {hard.length === 0 ? (
           <div className="ok-banner">
             <CheckCircle size={20} weight="fill" /> すべての条件を満たしています
-            {soft.length > 0 && <span className="muted" style={{ fontWeight: 500 }}>(出勤日数の目標とのずれが {soft.length} 件)</span>}
+            {soft.length > 0 && <span className="muted" style={{ fontWeight: 500 }}>(出勤日数のずれが {soft.length} 件)</span>}
           </div>
         ) : (
           <ViolationList items={hard} />
@@ -95,7 +92,7 @@ export function ResultView({ yearMonth }: { yearMonth: string }) {
           <thead>
             <tr>
               <th className="sticky">氏名</th>
-              <th className="sticky2">出勤 / 目標</th>
+              <th className="sticky2">出勤日数</th>
               {dates.map((d) => {
                 const w = weekday(d);
                 const st = dayStatus(d, plan);
@@ -118,8 +115,8 @@ export function ResultView({ yearMonth }: { yearMonth: string }) {
               return (
                 <tr key={emp.id}>
                   <td className="sticky">{emp.name}</td>
-                  <td className={`sticky2 num${work !== target ? ' muted' : ''}`}>
-                    {work} / {target}
+                  <td className="sticky2 num" title={work !== target ? (model.targetExplicit[ei] ? `月の出勤日数の設定は ${target} 日` : `均等に配分すると ${target} 日`) : undefined}>
+                    {work} 日
                   </td>
                   {dates.map((d) => {
                     const st = dayStatus(d, plan);
@@ -137,7 +134,16 @@ export function ResultView({ yearMonth }: { yearMonth: string }) {
                           onClick={() => toggle(emp.id, d)}
                           title={`${emp.name} ${formatDateShort(d)}${t ? ` ${formatTime(t.start)}-${formatTime(t.end)}` : ''}${wish ? ' (有給)' : ''}${custom ? ` (有給 ${plan.timeOffs[emp.id][d].start}-${plan.timeOffs[emp.id][d].end})` : ''}`}
                         >
-                          {on ? (t ? `${formatTime(t.start).split(':')[0]}-${formatTime(t.end).split(':')[0]}` : '出') : wish ? '休' : ''}
+                          {on ? (
+                            <span className="cell-2l">
+                              <span>{t ? `${formatTime(t.start).split(':')[0]}-${formatTime(t.end).split(':')[0]}` : '出'}</span>
+                              {custom && <span className="cell-sub">有給 {formatTime(plan.timeOffs[emp.id][d].start)}-{formatTime(plan.timeOffs[emp.id][d].end)}</span>}
+                            </span>
+                          ) : wish ? (
+                            '有給'
+                          ) : (
+                            ''
+                          )}
                         </button>
                       </td>
                     );
@@ -149,18 +155,14 @@ export function ResultView({ yearMonth }: { yearMonth: string }) {
           <tfoot>
             <tr>
               <td className="sticky">出勤人数</td>
-              <td className="sticky2 muted small">必要</td>
+              <td className="sticky2" />
               {dates.map((d) => {
                 const di = days.indexOf(d);
                 if (di < 0) return <td key={d} className="off" />;
                 const c = state.cnt[di];
-                const h = model.headcount[di];
                 return (
-                  <td key={d} className={`num${c !== h ? ' bad' : ''}`} title={`必要 ${h} 人`}>
+                  <td key={d} className={`num${badDays.has(d) ? ' bad' : ''}`}>
                     {c}
-                    <span className="dim" style={{ fontWeight: 400 }}>
-                      /{h}
-                    </span>
                   </td>
                 );
               })}

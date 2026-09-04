@@ -38,7 +38,7 @@ describe('solve', () => {
     const hard = res.violations.filter((v) => v.severity === 'hard');
     expect(hard).toEqual([]);
     expect(res.assignments['2026-09-01']).not.toContain('e2');
-    expect(res.assignments['2026-09-07']).toHaveLength(12);
+    expect(res.assignments['2026-09-07'].length).toBeGreaterThanOrEqual(12);
     expect(ms).toBeLessThan(15000);
   });
 
@@ -48,7 +48,7 @@ describe('solve', () => {
     const plan = emptyPlan('2026-09');
     const m = buildModel(s, plan, businessDays(plan));
     const d = diagnose(m);
-    expect(d.some((v) => v.kind === 'headcount')).toBe(true);
+    expect(d.some((v) => v.kind === 'role')).toBe(true);
   });
 });
 
@@ -76,6 +76,23 @@ describe('役割の枠', () => {
     const days = businessDays(plan);
     const res = solve({ settings: s, plan, days, seed: 7 });
     expect(res.violations.filter((v) => v.severity === 'hard')).toEqual([]);
-    for (const d of days) expect(res.assignments[d]).toHaveLength(4);
+    for (const d of days) expect(res.assignments[d].length).toBeGreaterThanOrEqual(4);
+  });
+});
+
+describe('役割のない従業員', () => {
+  it('役割のない従業員も、役割のある人と同じくらいの日数で出勤に割り当たる', () => {
+    const s = settings(6);
+    s.employees[5].skillIds = [];
+    s.dailyRoleNeeds = { s1: 1, s2: 1 };
+    const plan = emptyPlan('2026-10');
+    const days = businessDays(plan);
+    const res = solve({ settings: s, plan, days, seed: 11 });
+    expect(res.violations.filter((v) => v.severity === 'hard')).toEqual([]);
+    const worked = days.filter((d) => res.assignments[d].includes('e5')).length;
+    // 役割のある 5 人で毎日 2 枠 → 1 人あたり約 8〜9 日。役割のない人も同程度
+    expect(worked).toBeGreaterThanOrEqual(7);
+    expect(worked).toBeLessThanOrEqual(10);
+    for (const d of days) expect(res.assignments[d].length).toBeGreaterThanOrEqual(2);
   });
 });

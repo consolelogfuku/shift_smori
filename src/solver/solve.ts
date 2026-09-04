@@ -61,6 +61,23 @@ function greedy(m: Model, s: State, rng: ReturnType<typeof createRng>): void {
         remain[sk]--;
       }
     }
+    // 均した人数まで、誰でもよいので埋める (ソフト)
+    while (picked.size < m.expected[d]) {
+      let best = -1;
+      let bestScore = -Infinity;
+      for (let e = 0; e < m.E; e++) {
+        if (picked.has(e) || !m.avail[e * m.D + d]) continue;
+        if (m.conflictsByEmp[e].some((o) => picked.has(o))) continue;
+        const sc = score(e) - m.empSkills[e].length * 0.1;
+        if (sc > bestScore) {
+          bestScore = sc;
+          best = e;
+        }
+      }
+      if (best === -1) break;
+      picked.add(best);
+      s.flip(best, d);
+    }
   }
 }
 

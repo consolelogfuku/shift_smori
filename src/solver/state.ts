@@ -1,4 +1,4 @@
-import { W_AVAIL, W_CONF, W_DAYS, W_HEAD, W_ROLE, unfilledRoles, type Model } from './model';
+import { W_AVAIL, W_BAL, W_CONF, W_DAYS, W_ROLE, unfilledRoles, type Model } from './model';
 
 /** 割り当て状態と増分コスト計算 */
 export class State {
@@ -49,7 +49,7 @@ export class State {
     }
     let c = mustPenalty;
     for (let d = 0; d < m.D; d++) {
-      c += W_HEAD * Math.abs(this.cnt[d] - m.headcount[d]);
+      c += W_BAL * Math.abs(this.cnt[d] - m.expected[d]);
       this.roleGap[d] = this.roleGapOf(d);
       c += W_ROLE * this.roleGap[d];
       for (let e = 0; e < m.E; e++) {
@@ -73,14 +73,14 @@ export class State {
     let dl = 0;
     if (m.must[e * m.D + d]) dl += on ? W_AVAIL : -W_AVAIL;
     const c0 = this.cnt[d];
-    dl += W_HEAD * (Math.abs(c0 + s - m.headcount[d]) - Math.abs(c0 - m.headcount[d]));
+    dl += W_BAL * (Math.abs(c0 + s - m.expected[d]) - Math.abs(c0 - m.expected[d]));
     for (const o of m.conflictsByEmp[e]) if (this.x[o * m.D + d]) dl += s * W_CONF;
     const w0 = this.work[e];
     dl += W_DAYS * (Math.abs(w0 + s - m.target[e]) - Math.abs(w0 - m.target[e]));
     this.x[e * m.D + d] = on ? 0 : 1;
     this.cnt[d] += s;
     this.work[e] += s;
-    if (m.empSkills[e].length > 0 && m.headcount[d] > 0) {
+    if (m.empSkills[e].length > 0 && m.roleSum[d] > 0) {
       const g = this.roleGapOf(d);
       dl += W_ROLE * (g - this.roleGap[d]);
       this.roleGap[d] = g;

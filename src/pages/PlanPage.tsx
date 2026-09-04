@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { ArrowRight, CaretLeft, CaretRight, Minus, Play, Plus, Warning, X } from '@phosphor-icons/react';
+import { ArrowRight, CaretLeft, CaretRight, Minus, Play, Plus, X } from '@phosphor-icons/react';
 import { PLAN_SCREENS, usePlan, useStore, type DayState, type PlanScreen } from '../store';
 import {
   WEEKDAY_LABELS,
@@ -17,16 +17,17 @@ import {
   subtractTimeOff,
   weekday,
 } from '../lib/dates';
-import { buildModel, diagnose, headcountFor, roleNeedsFor } from '../solver/model';
+import { buildModel, diagnose, roleNeedsFor } from '../solver/model';
 import { useSolver } from '../hooks/useSolver';
 import { Empty, Popover, type Anchor } from '../components/ui';
 import { ResultView } from '../components/ResultView';
 
 const SCREEN_META: Record<PlanScreen, { step: number; title: string; next?: PlanScreen; nextLabel?: string }> = {
-  planClosed: { step: 1, title: '営業所の休業日を登録', next: 'planOffs', nextLabel: 'STEP 2 へ' },
-  planOffs: { step: 2, title: '従業員の有給・出勤希望日を登録', next: 'planRoles', nextLabel: 'STEP 3 へ' },
-  planRoles: { step: 3, title: '必要な役割を調整', next: 'planRun', nextLabel: 'STEP 4 へ' },
-  planRun: { step: 4, title: 'シフトを組む' },
+  planMonth: { step: 1, title: '何年何月のシフトを組むか', next: 'planClosed', nextLabel: 'STEP 2 へ' },
+  planClosed: { step: 2, title: '営業所の休業日を登録', next: 'planOffs', nextLabel: 'STEP 3 へ' },
+  planOffs: { step: 3, title: '従業員の有給・出勤希望日を登録', next: 'planRoles', nextLabel: 'STEP 4 へ' },
+  planRoles: { step: 4, title: '必要な役割を調整', next: 'planRun', nextLabel: 'STEP 5 へ' },
+  planRun: { step: 5, title: 'シフトを組む' },
 };
 
 export function PlanPage({ screen }: { screen: PlanScreen }) {
@@ -71,6 +72,7 @@ export function PlanPage({ screen }: { screen: PlanScreen }) {
         />
       ) : (
         <>
+          {screen === 'planMonth' && <MonthPicker yearMonth={yearMonth} onChange={setYearMonth} />}
           {screen === 'planClosed' && (
             <div className="stack" style={{ gap: 12 }}>
               <p className="muted">休業日をクリックしましょう。土日祝日は自動で休業日に設定されます。</p>
@@ -90,6 +92,40 @@ export function PlanPage({ screen }: { screen: PlanScreen }) {
         </>
       )}
     </>
+  );
+}
+
+/* ---------------- 対象月の選択 ---------------- */
+
+function MonthPicker({ yearMonth, onChange }: { yearMonth: string; onChange: (ym: string) => void }) {
+  const [y, m] = yearMonth.split('-').map(Number);
+  const thisYear = new Date().getFullYear();
+  const years = Array.from({ length: 4 }, (_, i) => thisYear - 1 + i);
+  if (!years.includes(y)) years.push(y);
+  years.sort();
+  const pad = (n: number) => (n < 10 ? `0${n}` : String(n));
+  return (
+    <div className="panel panel-pad month-picker">
+      <div>
+        <p className="muted">組みたい月を選んでください。過去の月を見返すときもここで切り替えます。初期設定の内容はどの月にも使われます。</p>
+      </div>
+      <div className="row center" style={{ gap: 8 }}>
+        <select className="select" value={y} onChange={(e) => onChange(`${e.target.value}-${pad(m)}`)} aria-label="年" style={{ width: 110, fontSize: 16, fontWeight: 600 }}>
+          {years.map((yy) => (
+            <option key={yy} value={yy}>
+              {yy} 年
+            </option>
+          ))}
+        </select>
+        <select className="select" value={m} onChange={(e) => onChange(`${y}-${pad(Number(e.target.value))}`)} aria-label="月" style={{ width: 96, fontSize: 16, fontWeight: 600 }}>
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((mm) => (
+            <option key={mm} value={mm}>
+              {mm} 月
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
   );
 }
 
@@ -141,10 +177,10 @@ function RunScreen({ yearMonth }: { yearMonth: string }) {
   const hasResult = useStore((s) => !!s.results[yearMonth]);
   const solver = useSolver();
   const days = useMemo(() => businessDays(plan), [plan]);
-  const issues = useMemo(() => diagnose(buildModel(settings, plan, days)), [settings, plan, days]);
-  const hardIssues = issues.filter((v) => v.severity === 'hard');
-  const softIssues = issues.filter((v) => v.severity === 'soft');
-  const slots = days.reduce((a, d) => a + headcountFor(settings, plan, d), 0);
+  const model = useMemo(() => buildModel(settings, plan, days), [settings, plan, days]);
+  const issues = useMemo(() => diagnose(model), [model]);
+  const totalDays = model.target.reduce((a, b) => a + b, 0);
+  const roleSlots = model.roleSum.reduce((a, b) => a + b, 0);
   const offs = Object.values(plan.requestedOffs).reduce((a, l) => a + l.length, 0);
 
   const run = async () => {
@@ -164,7 +200,8 @@ function RunScreen({ yearMonth }: { yearMonth: string }) {
             {[
               ['営業日', `${days.length} 日`],
               ['従業員', `${settings.employees.length} 人`],
-              ['出勤枠の合計', `${slots} 人日`],
+              ['役割の最低人数の合計', `${roleSlots} 人日`],
+              ['全員の出勤日数の合計', `${totalDays} 人日`],
               ['有給 (終日)', `${offs} 件`],
             ].map(([k, v]) => (
               <tr key={k}>
@@ -177,25 +214,9 @@ function RunScreen({ yearMonth }: { yearMonth: string }) {
           </tbody>
         </table>
       </div>
-      {hardIssues.length > 0 && (
-        <div className="viol">
-          {hardIssues.map((v, i) => (
-            <div key={i} className="viol-item">
-              <Warning size={18} weight="fill" style={{ flexShrink: 0, marginTop: 1 }} />
-              <span>{v.message}</span>
-            </div>
-          ))}
-        </div>
-      )}
-      {softIssues.map((v, i) => (
-        <div key={i} className="viol-item soft">
-          <Warning size={18} weight="fill" style={{ flexShrink: 0, marginTop: 1 }} />
-          <span>{v.message}</span>
-        </div>
-      ))}
       <div className="row center">
-        <button className="btn btn-primary btn-lg" onClick={run} disabled={solver.running || days.length === 0 || slots === 0}>
-          <Play size={18} weight="fill" /> {solver.running ? '計算中' : hasResult ? 'もう一度シフトを組む' : 'シフトを組む'}
+        <button className="btn btn-primary btn-lg" onClick={run} disabled={solver.running || days.length === 0 || roleSlots === 0}>
+          <Play size={18} weight="fill" /> {solver.running ? '計算中' : 'シフトを組む'}
         </button>
       </div>
       {solver.running && (
@@ -204,10 +225,9 @@ function RunScreen({ yearMonth }: { yearMonth: string }) {
         </div>
       )}
       {solver.error && <p style={{ color: 'var(--danger)' }}>{solver.error}</p>}
-      {hardIssues.length > 0 && <p className="muted small">満たせない条件があっても実行はできます。できる限り近い割り当てを作り、下に守れなかった条件を表示します。</p>}
       {hasResult && (
         <div id="result-view" style={{ marginTop: 12 }}>
-          <ResultView yearMonth={yearMonth} />
+          <ResultView yearMonth={yearMonth} knownIssues={issues} />
         </div>
       )}
     </div>
@@ -298,7 +318,6 @@ function RoleNeedPopover({ yearMonth, date, anchor, onClose }: { yearMonth: stri
   const settings = useStore((s) => s.settings);
   const plan = usePlan(yearMonth);
   const setRoleNeedOverride = useStore((s) => s.setRoleNeedOverride);
-  const clearRoleNeedOverrides = useStore((s) => s.clearRoleNeedOverrides);
   const needs = roleNeedsFor(settings, plan, date);
   const base = settings.dailyRoleNeeds ?? {};
   const ov = plan.roleNeedOverrides?.[date] ?? {};
@@ -333,17 +352,12 @@ function RoleNeedPopover({ yearMonth, date, anchor, onClose }: { yearMonth: stri
           );
         })}
         <div className="row center" style={{ justifyContent: 'space-between', borderTop: '1px solid var(--line-2)', paddingTop: 8, marginTop: 4 }}>
-          <span className="muted small">合計 (この日の出勤人数)</span>
+          <span className="muted small">合計</span>
           <strong className="num">{total} 人</strong>
         </div>
         <div className="actions">
-          {Object.keys(ov).length > 0 && (
-            <button className="btn btn-ghost btn-sm" onClick={() => clearRoleNeedOverrides(yearMonth, date)}>
-              毎日の設定に戻す
-            </button>
-          )}
           <button className="btn btn-primary btn-sm" onClick={onClose}>
-            閉じる
+            保存
           </button>
         </div>
       </div>

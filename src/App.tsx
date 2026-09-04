@@ -19,6 +19,7 @@ const SETTINGS_LABELS: Record<SettingsScreen, string> = {
 };
 
 const PLAN_LABELS: Record<PlanScreen, string> = {
+  planMonth: '何年何月のシフトを組むか',
   planClosed: '営業所の休業日を登録',
   planOffs: '有給・出勤希望日を登録',
   planRoles: '必要な役割を調整',
@@ -57,7 +58,7 @@ export function App() {
 
 function Main() {
   const rawPage = useStore((s) => s.ui.page);
-  const page: Page = SETTINGS_SCREENS.includes(rawPage as SettingsScreen) || PLAN_SCREENS.includes(rawPage as PlanScreen) ? rawPage : (rawPage as string) === 'result' ? 'planRun' : ['plan', 'planHeadcount', 'planSkills'].includes(rawPage as string) ? 'planClosed' : 'employees';
+  const page: Page = SETTINGS_SCREENS.includes(rawPage as SettingsScreen) || PLAN_SCREENS.includes(rawPage as PlanScreen) ? rawPage : (rawPage as string) === 'result' ? 'planRun' : ['plan', 'planHeadcount', 'planSkills'].includes(rawPage as string) ? 'planMonth' : 'employees';
   const setPage = useStore((s) => s.setPage);
   const setTutorialSeen = useStore((s) => s.setTutorialSeen);
   const exportData = useStore((s) => s.exportData);
@@ -155,7 +156,7 @@ function Main() {
           <button className={`btn${dirty ? ' btn-primary' : ''}`} onClick={save} disabled={employeeCount === 0}>
             <DownloadSimple size={16} /> 保存する
           </button>
-          {dirty && <p className="small sidebar-note" style={{ color: 'var(--warn-ink)', padding: '0 8px', margin: '-4px 0 0' }}>未保存の変更があります。閉じる前に保存してください。</p>}
+          {dirty && <p className="small sidebar-note" style={{ color: 'var(--warn-ink)', padding: '0 8px', margin: '-4px 0 0' }}>未保存の変更があります。タブを閉じる前に保存してください。</p>}
           <button className="btn" onClick={() => fileRef.current?.click()}>
             <UploadSimple size={16} /> 読み込む
           </button>

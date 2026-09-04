@@ -1,11 +1,12 @@
 import type { Id, MonthPlan, Settings, Violation } from '../types';
 import { formatDateShort } from '../lib/dates';
 
-export const W_HEAD = 100;
+export const W_BAL = 5; // 日ごとの人数のばらつき (ソフト)
 export const W_ROLE = 100;
 export const W_CONF = 1000;
 export const W_DAYS = 10;
 export const W_AVAIL = 1000;
+
 
 export interface Model {
   E: number;
@@ -24,7 +25,8 @@ export interface Model {
   roleNeed: Int32Array; // D*S
   availDays: number[]; // per E
   availCount: number[]; // per D
-  headcount: number[]; // per D = 役割人数の合計
+  roleSum: number[]; // per D 役割の最低人数の合計
+  expected: number[]; // per D 均した場合の出勤人数 (ソフトの目安)
   target: number[]; // per E
   targetExplicit: boolean[];
   conflictsByEmp: number[][];
@@ -48,10 +50,6 @@ export function roleNeedsFor(settings: Settings, plan: MonthPlan, date: string):
     if (n > 0) out[sk.id] = n;
   }
   return out;
-}
-
-export function headcountFor(settings: Settings, plan: MonthPlan, date: string): number {
-  return Object.values(roleNeedsFor(settings, plan, date)).reduce((a, b) => a + b, 0);
 }
 
 export function buildModel(settings: Settings, plan: MonthPlan, days: string[]): Model {
@@ -98,7 +96,7 @@ export function buildModel(settings: Settings, plan: MonthPlan, days: string[]):
   });
 
   const roleNeed = new Int32Array(D * S);
-  const headcount = days.map((d, di) => {
+  const roleSum = days.map((d, di) => {
     const needs = roleNeedsFor(settings, plan, d);
     let total = 0;
     for (const [skillId, n] of Object.entries(needs)) {
@@ -121,27 +119,38 @@ export function buildModel(settings: Settings, plan: MonthPlan, days: string[]):
     return n;
   });
 
-  // 出勤日数の目標。明示されていない人には残り枠を均等配分
+  // 各人の月の出勤日数。
+  // 空欄 (均等) の人は役割の有無に関係なく全員同じ日数にする。
+  // その日数は「役割の最低人数の合計」から日数指定済みの役割保持者の分を引き、空欄の役割保持者で割って決める
   const target = new Array<number>(E).fill(0);
   const targetExplicit = emps.map((e) => e.monthlyWorkDays !== null && e.monthlyWorkDays !== undefined);
-  let totalSlots = headcount.reduce((a, b) => a + b, 0);
+  const hasRole = (i: number) => empSkills[i].length > 0;
+  const totalRoleSlots = roleSum.reduce((a, b) => a + b, 0);
+  let explicitHolderDays = 0;
   emps.forEach((e, i) => {
-    if (targetExplicit[i]) {
-      target[i] = Math.min(e.monthlyWorkDays as number, availDays[i]);
-      totalSlots -= target[i];
-    }
+    if (!targetExplicit[i]) return;
+    target[i] = Math.min(e.monthlyWorkDays as number, availDays[i]);
+    if (hasRole(i)) explicitHolderDays += target[i];
   });
-  const autoIdx = emps.map((_, i) => i).filter((i) => !targetExplicit[i]);
-  let remaining = Math.max(0, totalSlots);
-  while (remaining > 0) {
-    let best = -1;
-    for (const i of autoIdx) {
-      if (target[i] >= availDays[i]) continue;
-      if (best === -1 || target[i] < target[best] || (target[i] === target[best] && availDays[i] > availDays[best])) best = i;
+  const blankHolders = emps.map((_, i) => i).filter((i) => !targetExplicit[i] && hasRole(i));
+  const explicitIdx = emps.map((_, i) => i).filter((i) => targetExplicit[i]);
+  let per: number;
+  if (blankHolders.length > 0) per = Math.max(0, Math.round((totalRoleSlots - explicitHolderDays) / blankHolders.length));
+  else if (explicitIdx.length > 0) per = Math.round(explicitIdx.reduce((a, i) => a + target[i], 0) / explicitIdx.length);
+  else per = Math.round(totalRoleSlots / Math.max(1, E));
+  emps.forEach((_, i) => {
+    if (!targetExplicit[i]) target[i] = Math.min(per, availDays[i]);
+  });
+  // 日ごとの人数の目安 (全員の出勤日数の合計を営業日に均す)。ソフト制約
+  const totalTarget = target.reduce((a, b) => a + b, 0);
+  const expected = new Array<number>(D).fill(0);
+  if (D > 0) {
+    const base = Math.floor(totalTarget / D);
+    let rem = totalTarget - base * D;
+    for (let d = 0; d < D; d++) {
+      expected[d] = Math.max(roleSum[d], base + (rem > 0 ? 1 : 0));
+      if (rem > 0) rem--;
     }
-    if (best === -1) break;
-    target[best]++;
-    remaining--;
   }
 
   const conflictsByEmp: number[][] = Array.from({ length: E }, () => []);
@@ -169,7 +178,8 @@ export function buildModel(settings: Settings, plan: MonthPlan, days: string[]):
     roleNeed,
     availDays,
     availCount,
-    headcount,
+    roleSum,
+    expected,
     target,
     targetExplicit,
     conflictsByEmp,
@@ -222,37 +232,34 @@ export function diagnose(m: Model): Violation[] {
     out.push({ kind: 'availability', severity: 'hard', message: '従業員が登録されていません。', dates: [] });
     return out;
   }
-  const totalSlots = m.headcount.reduce((a, b) => a + b, 0);
+  const totalSlots = m.roleSum.reduce((a, b) => a + b, 0);
   if (totalSlots === 0) {
-    out.push({ kind: 'role', severity: 'hard', message: 'この役割の人は毎日最低何人必要かが設定されていません。初期設定で登録してください。', dates: [] });
-  }
-  const noRole = m.empNames.filter((_, e) => m.empSkills[e].length === 0);
-  if (noRole.length > 0) {
-    out.push({ kind: 'role', severity: 'soft', message: `役割が 1 つもない従業員がいます (${noRole.join('、')})。役割の枠には入れないため出勤日が割り当たりません。`, dates: [] });
+    out.push({ kind: 'role', severity: 'hard', message: '「この役割の人は毎日最低何人必要か」が設定されていません。初期設定で登録してください。', dates: [] });
   }
   m.days.forEach((d, di) => {
-    let mustCount = 0;
     const availList: number[] = [];
-    for (let e = 0; e < m.E; e++) {
-      mustCount += m.must[e * m.D + di];
-      if (m.avail[e * m.D + di]) availList.push(e);
+    for (let e = 0; e < m.E; e++) if (m.avail[e * m.D + di]) availList.push(e);
+    // 同じ日に出勤させない組は、どちらか一方しか出せないものとして数える
+    const usable = new Set(availList);
+    const dropped: string[] = [];
+    for (const e of availList) {
+      if (!usable.has(e)) continue;
+      for (const o of m.conflictsByEmp[e]) {
+        if (usable.has(o)) {
+          const victim = m.empSkills[o].length <= m.empSkills[e].length ? o : e;
+          usable.delete(victim);
+          dropped.push(`${m.empNames[e]} と ${m.empNames[o]}`);
+          if (victim === e) break;
+        }
+      }
     }
-    if (mustCount > m.headcount[di]) {
-      out.push({ kind: 'headcount', severity: 'hard', message: `${formatDateShort(d)} は希望出勤日の人が ${mustCount} 人いて、必要人数 ${m.headcount[di]} 人を超えています。`, dates: [d] });
-    }
-    if (m.availCount[di] < m.headcount[di]) {
-      out.push({ kind: 'headcount', severity: 'hard', message: `${formatDateShort(d)} は出勤できる人が ${m.availCount[di]} 人しかいないため、${m.headcount[di]} 人にできません。`, dates: [d] });
-    }
-    const remain = unfilledRoles(m, di, availList);
+    const remain = unfilledRoles(m, di, Array.from(usable));
     for (let s = 0; s < m.S; s++) {
       if (remain[s] > 0) {
-        out.push({ kind: 'role', severity: 'hard', message: `${formatDateShort(d)} は「${m.skillNames[s]}」に入れる人が ${remain[s]} 人足りません (出勤できる人全員を出しても不足)。`, dates: [d] });
+        const why = dropped.length > 0 ? `出勤できる人全員を出しても不足。同じ日に出勤させない組 (${Array.from(new Set(dropped)).join('、')}) があるため` : '出勤できる人全員を出しても不足';
+        out.push({ kind: 'role', severity: 'hard', message: `${formatDateShort(d)} は「${m.skillNames[s]}」に入れる人が ${remain[s]} 人足りません (${why})。`, dates: [d], refId: m.skillIds[s] });
       }
     }
   });
-  const totalTarget = m.target.reduce((a, b) => a + b, 0);
-  if (totalTarget !== totalSlots && totalSlots > 0) {
-    out.push({ kind: 'workdays', severity: 'soft', message: `月の出勤枠は合計 ${totalSlots} 人日ですが、出勤日数の合計は ${totalTarget} 人日です。差分は出勤人数か出勤日数のどちらかが崩れます。`, dates: [] });
-  }
   return out;
 }
