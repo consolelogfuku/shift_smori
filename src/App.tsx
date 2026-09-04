@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { CaretDown, DownloadSimple, Question, Table, UploadSimple } from '@phosphor-icons/react';
+import { CaretDown, ChatCircleText, DownloadSimple, Question, Table, UploadSimple } from '@phosphor-icons/react';
+import { FEEDBACK_URL } from './config';
 import { PLAN_SCREENS, SETTINGS_SCREENS, parseAppData, useStore, type Page, type PlanScreen, type SettingsScreen } from './store';
 import { SettingsPage } from './pages/SettingsPage';
 import { PlanPage } from './pages/PlanPage';
@@ -161,9 +162,16 @@ function Main() {
             <UploadSimple size={16} /> 読み込む
           </button>
           <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={(e) => onFile(e.target.files?.[0])} />
-          <button className="btn btn-ghost" onClick={() => setShowTutorial(true)}>
-            <Question size={16} /> 使い方
-          </button>
+          <div className="row" style={{ gap: 4 }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowTutorial(true)}>
+              <Question size={16} /> 使い方
+            </button>
+            {FEEDBACK_URL && (
+              <a className="btn btn-ghost btn-sm" href={FEEDBACK_URL} target="_blank" rel="noopener noreferrer">
+                <ChatCircleText size={16} /> 意見箱
+              </a>
+            )}
+          </div>
           <p className="dim small sidebar-note">データはこのタブを閉じると消えるので、終わったら「保存する」でファイルを残してください。</p>
         </div>
       </aside>
